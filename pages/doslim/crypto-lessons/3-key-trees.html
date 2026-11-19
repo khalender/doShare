@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key trees</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<main>
+<div class="path">doslim / learn encryption / lesson 3 of 3</div>
+<nav class="lessons" aria-label="Lessons">
+  <a href="1-secret-keys.html">1. Secret keys</a>
+  <a href="2-key-pairs.html">2. Key pairs and signatures</a>
+  <a href="3-key-trees.html" aria-current="page">3. Key trees and doSlim</a>
+</nav>
+<h1>Lesson 3: key trees and the doSlim school design</h1>
+<p class="lede">How lessons 1 and 2 add up to "the school reads everything, a teacher reads their classes, a pupil reads only their own work", why that is real encryption and not a permission check, and what happens when a card is lost. The demo runs the whole tree with real keys in your browser. About 40 minutes, then 50 questions.</p>
+
+<div class="toc">
+<a href="#s1">1. Encrypting a key</a><a href="#s2">2. Why two layers</a><a href="#s3">3. The tree</a><a href="#s4">4. Grant and revoke</a><a href="#s5">5. Unlocking an account</a><a href="#s6">6. The pupil card</a><a href="#s7">7. Lost keys</a><a href="#s8">8. The answer key</a><a href="#demo">Try the whole tree</a><a href="#s9">9. What it does not protect</a><a href="#s10">10. Why not web3</a><a href="#quiz">50 questions</a>
+</div>
+
+<section class="lesson" id="s1">
+<h2><span class="n">1.</span> Encrypting a key with another key</h2>
+<p>A key is 32 bytes. Bytes can be encrypted like any data. Encrypting a key with another key is called <strong>wrapping</strong>, and the result is a <strong>wrapped key</strong>: 32 bytes of key plus nonce and tag, stored in the open next to the data.</p>
+<div class="code">data key (DEK)        encrypts the data        answer → ciphertext
+key-encryption key    encrypts the data key    DEK → wrapped DEK
+to read: unwrap the DEK with the KEK, then decrypt the data with the DEK</div>
+<p>This pattern is called <strong>envelope encryption</strong>. Cloud providers use it for everything they store: AWS KMS, Google Cloud KMS and Apple's iCloud Keychain all hand out data keys wrapped under a key the customer or device controls.</p>
+<div class="idea"><p>This is the answer to your question from before. A teacher "having access" means a wrapped copy of the data key exists that the teacher's key can unwrap. No copy, no access, whatever the server says. And the server holds no key that unwraps any copy.</p></div>
+</section>
+
+<section class="lesson" id="s2">
+<h2><span class="n">2.</span> Why not encrypt the data straight with everyone's key?</h2>
+<ul class="plain">
+<li><strong>Sharing.</strong> To let 3 people read a 2 MB page of ink, wrap the 32-byte data key 3 times (240 bytes) instead of storing 3 encrypted copies of the ink (6 MB).</li>
+<li><strong>Adding a reader later.</strong> Wrap the data key once more. The ink is not touched.</li>
+<li><strong>Changing a key higher up.</strong> If a class key changes, rewrap the 100 enrolment keys under the new one (8 KB of work). The pupils' work stays as it is.</li>
+<li><strong>Different reach for different people.</strong> Each layer of the tree is a different circle of readers, as the next section shows.</li>
+</ul>
+</section>
+
+<section class="lesson" id="s3">
+<h2><span class="n">3.</span> The doSlim school tree</h2>
+<div class="code">school key ─ wraps ─▶ class key Maths 7B ─ wraps ─▶ enrolment key Ayşe·Maths ─ encrypts ─▶ Ayşe's maths work
+           └ wraps ─▶ class key Chem 7B  ─ wraps ─▶ enrolment key Ayşe·Chem  ─ encrypts ─▶ Ayşe's chemistry work
+Ayşe's key pair ─ sealed copy (lesson 2) ─▶ Ayşe·Maths and Ayşe·Chem
+
+who holds what:
+  each admin    the school key (wrapped for the admin's account key pair)
+  Ms Kaya       the Maths 7B class key (wrapped for her account key pair)
+  Mr Arslan     the Chem 7B class key
+  Ayşe          her own key pair (from the card)</div>
+<p>Reading is walking down the tree from a key you hold. The admin goes school → class → enrolment → data. Ms Kaya starts one level lower, so she reaches everything under Maths 7B and nothing under Chem 7B. Ayşe enters from the side, through the sealed copies made for her, and only her own enrolment keys have one.</p>
+<p>Two kinds of wrapping are mixed on purpose. Class and school keys are symmetric, so a teacher's iPad wraps with lesson 1's cipher. A pupil's copy is a sealed box for her public key (lesson 2), because the teacher's iPad must be able to give her a key without ever holding her private key.</p>
+</section>
+
+<section class="lesson" id="s4">
+<h2><span class="n">4.</span> Granting and revoking</h2>
+<p><strong>Granting</strong> is adding a wrapped copy. Mr Arslan adds Ayşe to Chemistry: his iPad makes the Ayşe·Chem key, wraps it under the Chem class key, checks Ayşe's public key against the signature chain (lesson 2), and seals a copy for it.</p>
+<p><strong>Revoking</strong> is harder, and the honest part of every encryption design: you cannot make someone forget what they already read. When Ms Kaya leaves:</p>
+<ol class="steps">
+<li>The server deletes her wrapped copy of the class key. Her device can no longer get it from the server.</li>
+<li>Her device may still have the old class key. So the admin's device makes a <strong>new</strong> class key, and new work goes under it.</li>
+<li>The existing enrolment keys are rewrapped under the new class key. Old work stays readable for the new teacher, without re-encrypting the work itself.</li>
+</ol>
+<p>Making a new key so a removed member cannot read what comes next is called <strong>key rotation</strong>. Everything Ms Kaya downloaded before she left, she keeps. No system can take that back.</p>
+</section>
+
+<section class="lesson" id="s5">
+<h2><span class="n">5.</span> How a teacher's account opens (T17, already built)</h2>
+<p>A teacher's private key is itself wrapped, once per <strong>unlock method</strong>, and the wrapped copies sit on the server. A new iPad downloads them and opens whichever it can:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Method</th><th>The wrapping key comes from</th></tr></thead>
+<tbody>
+<tr><td>Password</td><td>Argon2id(password, salt), lesson 1. The server gets a separate login proof, never this key.</td></tr>
+<tr><td>Passkey</td><td>The WebAuthn PRF extension: the passkey (iCloud Keychain, Google, Windows Hello) returns a secret per site that only it can produce.</td></tr>
+<tr><td>Another device</td><td>An already signed-in device seals the private key for the new device's throwaway public key, shown as a QR.</td></tr>
+<tr><td>Recovery words</td><td>24 words = 256 random bits, written on paper.</td></tr>
+</tbody></table></div>
+<p>So the whole doSlim tree hangs from four or so wrapped copies per adult. Forget the password, and any other method still opens the same private key.</p>
+</section>
+
+<section class="lesson" id="s6">
+<h2><span class="n">6.</span> The pupil card</h2>
+<ol class="steps">
+<li>Ms Kaya's iPad makes 32 random bytes: Ayşe's <strong>seed</strong> (lesson 2, section 9). From it, Ayşe's key pair.</li>
+<li>It signs Ayşe's public key with Ms Kaya's key, seals Ayşe's enrolment keys for it, and uploads the public key, the signature and the sealed copies. The seed stays on Ms Kaya's iPad only long enough to print.</li>
+<li>The QR holds <code>https://…/card/TOKEN#SEED</code>. A browser sends <code>/card/TOKEN</code> to the server to sign in, but never the part after <code>#</code>, the <strong>fragment</strong>. The page's own code reads the fragment and rebuilds the key pair on the iPad.</li>
+<li>The iPad stores the private key as a <strong>non-extractable</strong> WebCrypto key in IndexedDB: the page can use it to decrypt but no script can read its bytes out. On a shared iPad it sits behind Ayşe's PIN.</li>
+</ol>
+<div class="alert"><p><strong>[!] Limits to know.</strong> The page's code reads the fragment, so code the server sends could still steal it (section 9). A non-extractable key cannot be copied off the device, but it can be used by anyone who can run code on that device while it is unlocked. And libsodium's 25519 keys are not WebCrypto keys everywhere yet, so the build may need to keep the private key wrapped under a non-extractable AES key instead. A detail for the task, not a change to the design.</p></div>
+</section>
+
+<section class="lesson" id="s7">
+<h2><span class="n">7.</span> Lost keys: rewrap from above</h2>
+<p>Every key in the tree has a copy wrapped under the key above it. That makes recovery a rewrap, never a decrypt-everything:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Lost</th><th>Who fixes it</th><th>What their device does</th></tr></thead>
+<tbody>
+<tr><td>Ayşe's card</td><td>Ms Kaya (for Maths), Mr Arslan (for Chem), or an admin (for all)</td><td>New seed and key pair, new card; unwrap each Ayşe enrolment key with the class key, seal it for the new public key; the server drops the old sealed copies and the old card's token.</td></tr>
+<tr><td>Ms Kaya's every unlock method</td><td>An admin</td><td>Ms Kaya makes a new account key pair; the admin's device unwraps the Maths 7B class key through the school key and wraps it for her new public key.</td></tr>
+<tr><td>Every admin's key</td><td>Nobody</td><td>The top of the tree has nothing above it. Hence 2 or more admins, and a printed school recovery sheet in the safe.</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="lesson" id="s8">
+<h2><span class="n">8.</span> Two locks on the answer key</h2>
+<p>The worksheet's answer key must reach Ayşe's iPad (it grades on the device, D22), but she must not read it before hand-in. T17 locks it twice: once with the class's assignment key, then again with a <strong>release key</strong> the server holds. At hand-in the server records the hand-in and gives out the release key. Ayşe alone has one lock open, the server alone has the other: neither can read it alone. Both together only after the hand-in is on record.</p>
+</section>
+
+<section class="lesson" id="demo">
+<h2>Try the whole tree with real keys</h2>
+<p>AES-256-GCM for wrapping and data, ECDH P-256 sealed boxes for pupils, all in WebCrypto. Every "can read" below is an actual decryption; every "cannot" is an actual failure from the browser's crypto.</p>
+<div class="demo">
+  <div class="chips">
+    <button class="btn" type="button" id="tBuild">1. Build the school</button>
+    <button class="btn" type="button" id="tLost">Ayşe loses her card</button>
+  </div>
+  <p class="meta" style="margin:8px 0 4px">What the server stores (all of it):</p>
+  <div class="out" id="tDb"><span class="dim">Press "Build the school".</span></div>
+  <p class="meta" style="margin:16px 0 4px">Who tries to read</p>
+  <div class="chips" id="tWho"></div>
+  <p class="meta" style="margin:8px 0 4px">What they try to read</p>
+  <div class="chips" id="tWhat"></div>
+  <div class="out" id="tOut"><span class="dim">Pick a person and a piece of work.</span></div>
+</div>
+</section>
+
+<section class="lesson" id="s9">
+<h2><span class="n">9.</span> What the tree does not protect</h2>
+<ul class="plain">
+<li><span class="m">[-]</span> <strong>The code.</strong> The web app comes from doSlim's server. A dishonest release could send keys home. Mitigations: published build hashes (D22), a native app with store-signed builds (T22).</li>
+<li><span class="m">[-]</span> <strong>Metadata.</strong> The server sees which ids are in which class, how many rows, their sizes and times. Names and content are encrypted; the shape is not.</li>
+<li><span class="m">[-]</span> <strong>The device.</strong> An unlocked iPad with malware, or a pupil reading over a shoulder, is outside any encryption.</li>
+<li><span class="m">[-]</span> <strong>The past.</strong> A removed member keeps what they downloaded (section 4).</li>
+<li><span class="y">[x]</span> <strong>The school reads everything.</strong> Not a hole: the school is the controller of pupils' data under GDPR. State it in the agreement.</li>
+</ul>
+</section>
+
+<section class="lesson" id="s10">
+<h2><span class="n">10.</span> Why not a web3 design</h2>
+<p><strong>HD wallets (BIP32)</strong> derive child keys from a parent key: school seed → teacher keys → pupil keys. That gives "the parent can open the child" for free, which looks like our tree. Two problems. A teacher who leaves still holds a key that derives every pupil key under it, forever, and you cannot rotate one key without moving it to a new place in the tree. In our design each key is random and only <em>wrapped</em> under its parent, so rotating is a rewrap.</p>
+<p><strong>A blockchain</strong> solves agreement on an order of events between parties who do not trust a common server. doSlim has one server and no such need, and a public chain would publish metadata about minors permanently.</p>
+<p>What we do take from web3: keys made and kept on the device, a seed as a portable private key (the card), and signatures checked against a known root.</p>
+</section>
+
+<h2 id="quiz">50 questions</h2>
+<p class="meta">Pick an answer; the explanation appears. Your progress stays in this browser.</p>
+<div id="quiz"></div>
+
+<footer>Lesson 3 of 3 · back: <a href="2-key-pairs.html">key pairs and signatures</a></footer>
+</main>
+<script>
+window.QUIZ = { id: 'l3', items: [
+["What is 'wrapping' a key?", ["Compressing it", "Encrypting a key with another key", "Signing it", "Hashing it"], 1, "A wrapped key is a key encrypted under a key-encryption key."],
+["In envelope encryption, what encrypts the data itself?", ["The key-encryption key", "The data key", "The password", "The CA"], 1, "The data key encrypts data; the KEK only encrypts the data key."],
+["To read enveloped data, the order is...", ["decrypt data, then unwrap key", "unwrap the data key with the KEK, then decrypt the data", "verify signature, then hash", "ask the server for plaintext"], 1, "You need the data key before you can touch the data."],
+["Is the wrapped data key secret?", ["Yes, it must be hidden", "No, it can be stored in the open next to the data", "Only the nonce is", "Only on iPad"], 1, "Without the KEK the wrapped key is noise, like any ciphertext."],
+["Which of these uses envelope encryption?", ["AWS KMS", "A plain HTTP site", "Base64", "A SHA-256 checksum"], 0, "Cloud KMS services hand out wrapped data keys."],
+["In doSlim, what does 'Ms Kaya has access to Ayşe's maths work' mean in bytes?", ["A row in a permissions table", "A wrapped copy of the Ayşe·Maths key that her class key can unwrap", "Her name in the plaintext", "The server trusts her cookie"], 1, "Access is the existence of a copy she can decrypt, not a rule."],
+["The server deletes Mr Arslan's permissions but forgets nothing else. Can he read Ayşe's maths work?", ["Yes", "No, and he never could: no copy of the Ayşe·Maths key is wrapped for anything he holds", "Only marks", "Only on Tuesdays"], 1, "Encryption decided it from the start; permissions were never the gate for content."],
+["Why share a 2 MB ink page with 3 readers by wrapping its key instead of encrypting the ink 3 times?", ["Wrapping is more secure", "3 wrapped keys are about 240 bytes; 3 encrypted copies are 6 MB", "Ink cannot be encrypted", "The server requires it"], 1, "Wrap the small key, not the big data."],
+["A new reader needs access to existing work. What has to happen?", ["Re-encrypt all the work", "Wrap the existing data key once more for them", "Give them the password", "Nothing"], 1, "One more wrapped copy; the work is untouched."],
+["A class key changes. What has to be redone?", ["Re-encrypt every answer", "Rewrap the enrolment keys of that class under the new class key", "New cards for every pupil", "Nothing"], 1, "100 rewraps of 32 bytes, the work stays."],
+["Which key does a school admin hold?", ["Every pupil's private key", "The school key", "The server key", "No key"], 1, "From the school key they walk down to everything."],
+["Which key does Ms Kaya hold for her class?", ["The school key", "The Maths 7B class key", "Ayşe's seed", "The release key"], 1, "Teachers hold their class keys, wrapped for their account key pairs."],
+["Why can Ms Kaya not read Ayşe's chemistry work?", ["A rule forbids it", "The Ayşe·Chem key is wrapped under the Chem class key, which she does not hold", "Chemistry is not encrypted", "The tag fails on purpose"], 1, "She enters the tree at Maths 7B and cannot climb sideways."],
+["How does Ayşe reach her own enrolment keys?", ["Through the class key", "Through sealed copies made for her public key", "Through the school key", "The server sends them in plain"], 1, "She enters from the side with her own key pair."],
+["Why is Ayşe's copy a sealed box and not symmetric wrapping?", ["Sealed boxes are faster", "The teacher's iPad must give her a key without ever holding her private key", "Symmetric keys cannot wrap", "To make it smaller"], 1, "Only her public key is needed to seal for her."],
+["Why are class keys wrapped symmetrically under the school key?", ["Symmetric wrapping is fine when the wrapper holds the same key, as admins do", "Public keys are banned", "To save 48 bytes only", "No reason"], 0, "Whoever holds the school key wraps and unwraps class keys with one key."],
+["Could Ayşe read Ali's maths work through the Maths 7B tree?", ["Yes, they are in the same class", "No, she holds no class key, only her own enrolment keys", "Only his marks", "Only after hand-in"], 1, "Pupils enter from the side and reach only their own leaves."],
+["What does granting Ayşe access to Chemistry consist of?", ["A server flag", "Making the Ayşe·Chem key, wrapping it under Chem 7B and sealing a copy for Ayşe's checked public key", "Printing a new card", "Copying her maths key"], 1, "Grant = add wrapped copies."],
+["Before sealing for Ayşe, Mr Arslan's iPad checks...", ["her PIN", "the signature chain on her public key", "her birth date", "nothing"], 1, "Otherwise the server could swap in its own key (lesson 2)."],
+["A teacher leaves. Why is deleting her wrapped copy on the server not enough?", ["The server keeps backups", "Her device may still hold the old class key it already unwrapped", "Deletion is slow", "Wrapped copies cannot be deleted"], 1, "Hence a new class key for new work."],
+["What is key rotation?", ["Turning a key into words", "Making a new key so a removed member cannot read what comes next", "Moving keys between servers", "Reversing a key"], 1, "Rotation protects the future, not the past."],
+["After rotation, can the old teacher read what she downloaded before leaving?", ["No, it is erased", "Yes, nothing can take back what was already read", "Only marks", "Only if online"], 1, "Revocation is never retroactive."],
+["After rotating Maths 7B, how does the new teacher read last term's work?", ["She cannot", "The existing enrolment keys were rewrapped under the new class key", "The old teacher sends it", "From backups"], 1, "Rewrap the enrolment keys; the work keeps its keys."],
+["How is a teacher's private key kept on the server?", ["In plain", "Wrapped once per unlock method", "Split between servers", "It is not kept"], 1, "Password, passkey, another device, recovery words: each wraps the same private key."],
+["For the password unlock, where does the wrapping key come from?", ["The server", "Argon2id(password, salt) on the device", "The email address", "The TLS certificate"], 1, "The server gets a separate login proof, never this key."],
+["What does the WebAuthn PRF extension give doSlim?", ["A login cookie", "A secret per site that only the passkey can produce, used to wrap the private key", "The user's email", "A signature only"], 1, "The passkey becomes an unlock method that opens the key."],
+["How does 'another device' unlock a new iPad?", ["Emails the key", "The signed-in device seals the private key for the new iPad's throwaway public key shown as a QR", "Bluetooth plain copy", "The server forwards the password"], 1, "A sealed box across the QR handshake."],
+["A teacher forgets her password but has her passkey. What is lost?", ["Everything", "Nothing; the passkey's wrapped copy opens the same private key", "Her marks", "Half the classes"], 1, "That is why several unlock methods exist."],
+["What does the pupil card's QR contain?", ["The pupil's password", "A sign-in token and, after #, the seed", "The class key", "The school key"], 1, "Token for the server, seed for the device."],
+["Why put the seed after the # in the URL?", ["It looks nicer", "Browsers never send the fragment to the server", "It is encrypted there", "Servers need it"], 1, "The server sees /card/TOKEN only."],
+["Who can read the URL fragment?", ["Nobody", "The page's own JavaScript", "Only the server", "Only the printer"], 1, "Which is why code from the server could still steal it (section 9)."],
+["What is a non-extractable WebCrypto key?", ["A key that cannot be used", "A key the page can use but whose bytes no script can export", "A key stored on the server", "An expired key"], 1, "Usable, not copyable."],
+["What does the PIN protect on a shared class iPad?", ["The pupil's data on the server", "Use of the pupil's key on that one iPad", "The seed on the card", "The school key"], 1, "The PIN is a local gate, not the encryption key."],
+["Why does the pupil's key not hang from a PIN stored on the server?", ["PINs are hard to type", "10,000 PINs can be tried quickly by whoever holds the wrapped copy", "The server forbids it", "PINs are too long"], 1, "A PIN is too weak to protect a key the server stores (lesson 1)."],
+["Ayşe loses her card. Who can make her a new one for Maths?", ["Only the operator", "Ms Kaya or an admin", "Ali", "Nobody"], 1, "Anyone above her enrolment key in the tree can rewrap it."],
+["What does the teacher's device do for a lost card?", ["Re-encrypt all of Ayşe's work", "Make a new key pair, unwrap Ayşe's enrolment keys with the class key and seal them for the new public key", "Reset the server", "Copy the old seed"], 1, "Rewrap, not re-encrypt."],
+["Is any of Ayşe's work lost when her card is lost?", ["Yes, all", "No", "Only drafts", "Only chemistry"], 1, "Her enrolment keys still have copies under the class keys."],
+["Someone stole the card and might have saved data. What protects the future?", ["Nothing", "Drop the old sealed copies and token, and use new enrolment keys for new work", "Change the PIN", "Change the school name"], 1, "Rotation again: the past was readable to the thief, the future is not."],
+["Ms Kaya loses every unlock method. Who restores her classes?", ["Nobody", "An admin, through the school key", "Ayşe", "The operator"], 1, "The admin unwraps the class key and wraps it for her new key pair."],
+["Every admin loses their key. Who can restore the school?", ["The operator", "Nobody; nothing sits above the school key", "Any teacher", "The CA"], 1, "That is the price of the operator being unable to read. Use 2+ admins and a recovery sheet."],
+["Why is the answer key locked twice?", ["For speed", "So neither the pupil before hand-in nor the server alone can read it", "Because it is long", "To save space"], 1, "Pupil holds one lock, server holds the other release key."],
+["When does the server hand out the release key?", ["At sign-in", "After it records the hand-in", "Never", "At the start of term"], 1, "Then the device grades and shows why_not."],
+["Can the server read the answer key with its release key alone?", ["Yes", "No, it lacks the assignment key", "Only for maths", "Only before hand-in"], 1, "Two locks, two different holders."],
+["Which risk does end-to-end encryption NOT remove?", ["A stolen database dump", "A dishonest release of the web app's code", "A Wi-Fi snooper", "The operator reading stored rows"], 1, "The code that holds the keys comes from the server."],
+["What does the server still see in the school design?", ["Pupil names", "Which ids are in which class, sizes and times", "Answers", "Marks"], 1, "Metadata stays visible; content is encrypted."],
+["Why is the school reading everything not a security hole?", ["It is a hole", "The school is the controller of its pupils' data under GDPR", "Schools have no key", "The school cannot really read"], 1, "Say it plainly in the data agreement."],
+["What is the problem with deriving pupil keys from a teacher's key (BIP32 style)?", ["Too slow", "A teacher who leaves can derive those pupil keys forever, and one key cannot be rotated alone", "It needs a blockchain", "Keys get longer"], 1, "Random keys wrapped under parents give the same reach with revocation."],
+["Why no blockchain for doSlim?", ["Too expensive only", "There is one server and no need for strangers to agree on an order; a public chain would leak metadata about minors", "Blockchains cannot store keys", "Blockchains cannot run in a browser"], 1, "Wrong tool for this job."],
+["Which web3 ideas does the design keep?", ["Tokens and mining", "Keys made on the device, a seed as a portable private key, signatures checked against a root", "A public ledger", "Smart contracts"], 1, "Wallet ideas without the chain."],
+["Summing up: what decides who can read a piece of doSlim school work?", ["The server's permission table", "Which keys have a wrapped copy of that work's enrolment key that the reader can open", "The CA", "The user's role name"], 1, "Encryption decides; permissions only guard metadata and uploads."]
+]};
+</script>
+<script src="quiz.js"></script>
+<script>
+(function () {
+  const AES = { name: 'AES-GCM', length: 256 }, EC = { name: 'ECDH', namedCurve: 'P-256' };
+  const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+  const aesKey = (raw) => crypto.subtle.importKey('raw', raw, AES, false, ['encrypt', 'decrypt']);
+  async function lock(keyRaw, bytes) { const n = rand(12); return { n, c: new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: n }, await aesKey(keyRaw), bytes)) }; }
+  async function unlock(keyRaw, box) { return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: box.n }, await aesKey(keyRaw), box.c)); }
+  const pair = () => crypto.subtle.generateKey(EC, false, ['deriveKey']);
+  async function seal(pub, bytes) {
+    const eph = await crypto.subtle.generateKey(EC, true, ['deriveKey']);
+    const k = await crypto.subtle.deriveKey({ name: 'ECDH', public: pub }, eph.privateKey, AES, false, ['encrypt']);
+    const n = rand(12);
+    return { e: new Uint8Array(await crypto.subtle.exportKey('raw', eph.publicKey)), n, c: new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: n }, k, bytes)) };
+  }
+  async function openSeal(priv, box) {
+    const epub = await crypto.subtle.importKey('raw', box.e, EC, false, []);
+    const k = await crypto.subtle.deriveKey({ name: 'ECDH', public: epub }, priv, AES, false, ['decrypt']);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: box.n }, k, box.c));
+  }
+
+  let S = null; // the "world": keys held by people, rows held by the server
+  const pupils = { ayse: 'Ayşe', ali: 'Ali' };
+  const work = [
+    { id: 'am', pupil: 'ayse', cls: 'maths', text: "Ayşe · Maths: 7 × 8 = 56, mark 5/5, 'good, show your steps'" },
+    { id: 'ac', pupil: 'ayse', cls: 'chem', text: 'Ayşe · Chemistry: H2O is water, mark 4/5' },
+    { id: 'bm', pupil: 'ali', cls: 'maths', text: 'Ali · Maths: 6 × 7 = 48, mark 3/5, see the 7s table' },
+  ];
+  const people = [
+    { id: 'admin', name: 'School admin' }, { id: 'kaya', name: 'Ms Kaya (Maths 7B)' }, { id: 'arslan', name: 'Mr Arslan (Chem 7B)' },
+    { id: 'ayse', name: 'Ayşe' }, { id: 'ali', name: 'Ali' }, { id: 'server', name: 'Server' }, { id: 'oldcard', name: 'Thief with Ayşe\'s old card' },
+  ];
+  let who = 'kaya', what = 'am';
+
+  async function build() {
+    const school = rand(32), maths = rand(32), chem = rand(32);
+    const pairs = { ayse: await pair(), ali: await pair() };
+    const db = { classKeys: {}, enrolByClass: {}, sealed: {}, data: {} };
+    db.classKeys.maths = await lock(school, maths);
+    db.classKeys.chem = await lock(school, chem);
+    for (const w of work) {
+      const ek = rand(32);
+      db.enrolByClass[w.id] = { cls: w.cls, box: await lock(w.cls === 'maths' ? maths : chem, ek) };
+      db.sealed[w.id] = { pupil: w.pupil, gen: 1, box: await seal(pairs[w.pupil].publicKey, ek) };
+      db.data[w.id] = await lock(ek, enc.encode(w.text));
+    }
+    S = { db, hold: { admin: { school }, kaya: { maths }, arslan: { chem }, ayse: { priv: pairs.ayse.privateKey, gen: 1 }, ali: { priv: pairs.ali.privateKey, gen: 1 }, server: {}, oldcard: null }, lost: false };
+    drawDb(); go();
+  }
+
+  function drawDb() {
+    const d = S.db, L = [];
+    L.push('<span class="dim">class keys, wrapped under the school key</span>');
+    for (const c in d.classKeys) L.push('  ' + c.padEnd(6) + hex(d.classKeys[c].c, 14));
+    L.push('<span class="dim">enrolment keys, wrapped under their class key</span>');
+    for (const id in d.enrolByClass) L.push('  ' + id + ' (' + d.enrolByClass[id].cls + ')  ' + hex(d.enrolByClass[id].box.c, 12));
+    L.push('<span class="dim">enrolment keys, sealed for the pupil\'s public key</span>');
+    for (const id in d.sealed) L.push('  ' + id + ' → ' + pupils[d.sealed[id].pupil] + (d.sealed[id].gen > 1 ? ' (new card)' : '') + '  ' + hex(d.sealed[id].box.c, 12));
+    L.push('<span class="dim">work, encrypted with the enrolment key</span>');
+    for (const id in d.data) L.push('  ' + id + '  ' + hex(d.data[id].c, 18));
+    L.push('<span class="dim">No row above is readable text. The server holds no key at all.</span>');
+    document.getElementById('tDb').innerHTML = L.join('\n');
+  }
+
+  async function attempt(pid, wid) {
+    const out = document.getElementById('tOut');
+    if (!S) return out.innerHTML = '<span class="bad">Build the school first.</span>';
+    const w = work.find((x) => x.id === wid), h = S.hold[pid], d = S.db, L = [];
+    const name = people.find((p) => p.id === pid).name;
+    L.push(name + ' tries to read: ' + w.text.split(':')[0]);
+    const step = async (label, fn) => { try { const r = await fn(); L.push('<span class="ok">[x] ' + label + '</span>'); return r; } catch (e) { L.push('<span class="bad">[!] ' + label + ' → ' + e.name + ' (wrong key, the tag check failed)</span>'); return null; } };
+    let ek = null;
+    if (!h) { L.push('<span class="dim">Nobody has used the old card yet. Press "Ayşe loses her card" first.</span>'); return out.innerHTML = L.join('\n'); }
+    if (pid === 'server') {
+      L.push('<span class="dim">The server has every row above and no key. Nothing to decrypt with.</span>');
+      L.push('<span class="bad">[!] It sees: ' + hex(d.data[wid].c, 24) + '</span>');
+      return out.innerHTML = L.join('\n');
+    }
+    if (h.priv) {
+      const s = d.sealed[wid];
+      L.push('Has a pupil private key. Opens the sealed copy of the ' + wid + ' enrolment key (sealed for ' + pupils[s.pupil] + (s.gen > 1 ? ', new card' : '') + ').');
+      ek = await step('open sealed copy with own private key', () => openSeal(h.priv, s.box));
+    } else {
+      let classKey = null;
+      if (h.school) {
+        L.push('Holds the school key. Unwraps the ' + w.cls + ' class key.');
+        classKey = await step('unwrap ' + w.cls + ' class key with the school key', () => unlock(h.school, d.classKeys[w.cls]));
+      } else {
+        const own = h.maths ? 'maths' : 'chem';
+        classKey = h[own];
+        L.push('Holds the ' + own + ' class key. The ' + wid + ' enrolment key is wrapped under the ' + w.cls + ' class key.');
+        if (own !== w.cls) L.push('<span class="dim">Tries anyway with the key it has:</span>');
+      }
+      if (classKey) ek = await step('unwrap the ' + wid + ' enrolment key', () => unlock(classKey, d.enrolByClass[wid].box));
+    }
+    if (ek) {
+      const pt = await step('decrypt the work with the enrolment key', () => unlock(ek, d.data[wid]));
+      if (pt) L.push('\n' + dec.decode(pt));
+    } else L.push('<span class="dim">\nStopped. No key it holds opens any copy of this enrolment key, so the work stays ciphertext.</span>');
+    out.innerHTML = L.join('\n');
+  }
+
+  async function loseCard() {
+    if (!S) return build();
+    if (S.lost) return;
+    const d = S.db, fresh = await pair();
+    const log = ['Ayşe\'s card is lost. A new card with a new seed and key pair.'];
+    // Ms Kaya rewraps maths, Mr Arslan rewraps chem: unwrap with class key, seal for the new public key
+    for (const id of ['am', 'ac']) {
+      const cls = d.enrolByClass[id].cls, ck = cls === 'maths' ? S.hold.kaya.maths : S.hold.arslan.chem;
+      const ek = await unlock(ck, d.enrolByClass[id].box);
+      d.sealed[id] = { pupil: 'ayse', gen: 2, box: await seal(fresh.publicKey, ek) };
+      log.push((cls === 'maths' ? "Ms Kaya's" : "Mr Arslan's") + ' iPad: unwrap ' + id + ' with the ' + cls + ' class key, seal for Ayşe\'s new public key.');
+    }
+    S.hold.oldcard = { priv: S.hold.ayse.priv, gen: 1 };
+    S.hold.ayse = { priv: fresh.privateKey, gen: 2 };
+    S.lost = true;
+    log.push('The server replaced the old sealed copies. Ayşe\'s work was not re-encrypted. Now try "Ayşe" and "Thief with Ayşe\'s old card".');
+    drawDb();
+    document.getElementById('tOut').innerHTML = '<span class="ok">' + log.join('\n') + '</span>';
+  }
+
+  function chips(elId, list, get, set) {
+    const el = document.getElementById(elId);
+    el.innerHTML = '';
+    list.forEach((x) => {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.type = 'button'; b.textContent = x.name || x.text.split(':')[0];
+      b.setAttribute('aria-pressed', x.id === get());
+      b.onclick = () => { set(x.id); [...el.children].forEach((c, i) => c.setAttribute('aria-pressed', list[i].id === get())); go(); };
+      el.appendChild(b);
+    });
+  }
+  const go = () => attempt(who, what);
+  chips('tWho', people, () => who, (v) => { who = v; });
+  chips('tWhat', work, () => what, (v) => { what = v; });
+  document.getElementById('tBuild').onclick = build;
+  document.getElementById('tLost').onclick = loseCard;
+})();
+</script>
+</body>
+</html>

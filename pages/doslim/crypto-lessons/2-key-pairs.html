@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key pairs</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="lesson.css">
+</head>
+<body>
+<main>
+<div class="path">doslim / learn encryption / lesson 2 of 3</div>
+<nav class="lessons" aria-label="Lessons">
+  <a href="1-secret-keys.html">1. Secret keys</a>
+  <a href="2-key-pairs.html" aria-current="page">2. Key pairs and signatures</a>
+  <a href="3-key-trees.html">3. Key trees and doSlim</a>
+</nav>
+<h1>Lesson 2: key pairs and signatures</h1>
+<p class="lede">How a key reaches someone through a server that must not read it, how a signature proves who made something, and why a CA (your idea) is about trust in keys, not about decrypting. About 30 minutes, then 50 questions.</p>
+
+<div class="toc">
+<a href="#s1">1. The sharing problem</a><a href="#s2">2. Key pairs</a><a href="#s3">3. Agreeing on a secret</a><a href="#s4">4. Encrypting to a public key</a><a href="#demoA">Try: agreement</a><a href="#s5">5. Signatures</a><a href="#s6">6. The swap attack</a><a href="#s7">7. Fingerprints</a><a href="#s8">8. Chains and CAs</a><a href="#demoB">Try: signatures</a><a href="#s9">9. Seeds</a><a href="#quiz">50 questions</a>
+</div>
+
+<section class="lesson" id="s1">
+<h2><span class="n">1.</span> The sharing problem</h2>
+<p>Lesson 1 left a gap. Ms Kaya's iPad has a 32-byte key and Ayşe's iPad needs it. They are in different places, and the only thing between them is doSlim's server, which must not see the key. Sending it in plain would hand it to the server. Encrypting it needs another shared key, which has the same problem. Public-key cryptography breaks the loop.</p>
+</section>
+
+<section class="lesson" id="s2">
+<h2><span class="n">2.</span> Key pairs: a public half and a private half</h2>
+<p>A <strong>key pair</strong> is two linked keys made together on a device. The <strong>private key</strong> never leaves that device (or leaves only encrypted). The <strong>public key</strong> can be shown to anyone, the server included. The math links them so that what one half does, only the other half can check or undo, and the private key cannot be worked out from the public one.</p>
+<div class="analogy">Think of the public key as an open padlock you hand out by the hundreds. Anyone can snap it shut on a box. Only you have the key that opens it.</div>
+<div class="tablewrap"><table>
+<thead><tr><th>Algorithm</th><th>Used for</th><th>Public key</th><th>Private part</th><th>libsodium</th></tr></thead>
+<tbody>
+<tr><td>X25519</td><td>Agreeing on a secret, encrypting to someone</td><td>32 bytes</td><td>32 bytes</td><td><code>crypto_box</code>, <code>crypto_box_seal</code></td></tr>
+<tr><td>Ed25519</td><td>Signatures</td><td>32 bytes</td><td>32-byte seed (libsodium keeps 64: seed + public key)</td><td><code>crypto_sign</code></td></tr>
+<tr><td>RSA-2048</td><td>Both, older</td><td>256 bytes</td><td>much larger</td><td>not in libsodium</td></tr>
+</tbody></table></div>
+<p>The 25519 family is built on one elliptic curve (Curve25519). Small keys, fast, and designed so the easy way to use it is the safe way. In general use one pair for encryption and another for signing.</p>
+</section>
+
+<section class="lesson" id="s3">
+<h2><span class="n">3.</span> Agreeing on a secret in public (Diffie-Hellman)</h2>
+<p>In 1976 Diffie and Hellman showed that two parties can each combine <em>their own private key</em> with <em>the other's public key</em> and arrive at the same secret, while someone watching sees only the two public keys and cannot compute it.</p>
+<div class="analogy">The paint picture: both start with the same public yellow. Ayşe adds her secret red and sends the orange mix. Ms Kaya adds her secret blue and sends the green mix. Each adds their own secret colour to what they received. Both end with yellow + red + blue, the same brown. The watcher has orange and green and cannot unmix them.</div>
+<div class="code">shared = X25519(my private key, your public key)
+Ayşe:  X25519(ayse_private, kaya_public)  ─┐
+Kaya:  X25519(kaya_private, ayse_public)  ─┴─ same 32 bytes
+server: has ayse_public and kaya_public → cannot get there</div>
+<p>The shared 32 bytes then go through a KDF and become a symmetric key for lesson 1's ciphers. Public-key math is slow and handles small values; it is only used to set up a symmetric key, which then does the real work. This is called <strong>hybrid encryption</strong>, and every real system works this way, including TLS.</p>
+</section>
+
+<section class="lesson" id="s4">
+<h2><span class="n">4.</span> Encrypting to someone's public key: the sealed box</h2>
+<p>Often the sender has no key pair of their own in the conversation, or should not need one. libsodium's <code>crypto_box_seal</code> handles that:</p>
+<ol class="steps">
+<li>Make a throwaway (ephemeral) key pair for this one message.</li>
+<li>X25519 of the throwaway private key and the recipient's public key gives a shared secret.</li>
+<li>Encrypt the message with it (XSalsa20-Poly1305), nonce derived from the two public keys.</li>
+<li>Send the throwaway public key (32 bytes) + ciphertext + tag (16 bytes). Delete the throwaway private key.</li>
+</ol>
+<p>Only the recipient's private key can redo step 2. Even the sender cannot open the box afterwards. The overhead is 48 bytes, so sealing a 32-byte key gives 80 bytes, the number from the earlier page. In doSlim, a sealed box is how Ms Kaya's iPad gives Ayşe the Ayşe·Maths key: <strong>encrypt the key, not the data</strong>, for her public key.</p>
+<div class="idea"><p>Sealed boxes are anonymous: the recipient learns nothing about who sealed it. If the sender matters, add a signature (section 5) or use <code>crypto_box</code>, which uses the sender's real key pair.</p></div>
+</section>
+
+<section class="lesson" id="demoA">
+<h2>Try it: two devices agree on a key</h2>
+<p>Real ECDH on curve P-256 in WebCrypto (the browser standard; libsodium's X25519 works the same way on another curve).</p>
+<div class="demo">
+  <div class="chips">
+    <button class="btn" type="button" id="aMake">1. Make both key pairs</button>
+    <button class="btn" type="button" id="aDerive">2. Each computes the secret</button>
+    <button class="btn" type="button" id="aEve">3. The server tries</button>
+  </div>
+  <div class="out" id="aOut"><span class="dim">Ayşe and Ms Kaya each make a key pair. Only public keys pass through the "server".</span></div>
+</div>
+</section>
+
+<section class="lesson" id="s5">
+<h2><span class="n">5.</span> Signatures: proof of who made it</h2>
+<p>A <strong>signature</strong> runs the pair the other way round. The private key <em>signs</em> a message and produces 64 bytes (Ed25519). Anyone with the public key can <em>verify</em> that exactly this message was signed by that private key. Change one bit of the message, or use another public key, and verification fails.</p>
+<div class="code">signature = sign(teacher_private, message)            64 bytes
+verify(teacher_public, message, signature) → true / false</div>
+<ul class="plain">
+<li><span class="y">[x]</span> A signature hides nothing. The message stays readable; signing and encrypting are separate jobs.</li>
+<li><span class="y">[x]</span> It proves origin and integrity: who, and that nothing changed.</li>
+<li><span class="y">[x]</span> Lesson 1's tag also proves nothing changed, but everyone with the shared key can make a valid tag. Only the private key holder can make a signature.</li>
+<li><span class="m">[-]</span> A signature does not prove <em>when</em>, and an old signed message can be replayed. Put a date or version inside what you sign.</li>
+</ul>
+</section>
+
+<section class="lesson" id="s6">
+<h2><span class="n">6.</span> The swap attack: why public keys need checking</h2>
+<p>Public keys solve sharing, but open a new hole. Ms Kaya's iPad asks the server: "What is Ayşe's public key?" A dishonest server answers with a key pair it made itself. The iPad seals Ayşe's key for the server's key. The server opens it, reads it, and even seals it again for the real Ayşe so nobody notices. This is the <strong>man-in-the-middle</strong> attack, and it is the real reason for your CA idea.</p>
+<div class="code">Kaya's iPad → "Ayşe's public key?" → server
+server      → returns EVIL_public  (it keeps EVIL_private)
+Kaya's iPad → seal(EVIL_public, ayse_maths_key) → server opens it
+encryption worked perfectly; it encrypted for the wrong person</div>
+<p>Encryption cannot catch this, because the encryption worked. Only a check that the public key really belongs to Ayşe catches it.</p>
+</section>
+
+<section class="lesson" id="s7">
+<h2><span class="n">7.</span> Fingerprints: checking a key by eye</h2>
+<p>A <strong>fingerprint</strong> is a short hash of a public key, shown as words or digits. Two people compare it through a channel the server does not control: in person, on paper, by phone. Signal's "safety numbers" and WhatsApp's security code QR are this. It works, but nobody will compare 500 pupils' fingerprints by hand. Signatures scale it.</p>
+</section>
+
+<section class="lesson" id="s8">
+<h2><span class="n">8.</span> Chains of trust and CAs</h2>
+<p>Instead of checking every key by eye, check <em>one</em> key by eye and let it vouch for others with signatures. That trusted key is the <strong>root</strong>; the one who holds it is a <strong>certificate authority</strong> (CA). A <strong>certificate</strong> is a public key plus a name, signed by the key above it.</p>
+<div class="code">The web:   root CA (built into your iPad)  → signs → Let's Encrypt R11 → signs → doslim.example's TLS key
+doSlim:    school signing key (fingerprint on paper) → signs → Ms Kaya's key → signs → Ayşe's key
+
+Mr Arslan's iPad, before sealing anything for Ayşe:
+  check Ayşe's key is signed by a teacher key,
+  that teacher key is signed by the school key,
+  the school key matches the fingerprint the school entered once → only then seal</div>
+<ul class="plain">
+<li>The root must arrive outside the system it protects. Browsers ship root keys with the operating system; a school gets its fingerprint on the welcome sheet or from the admin's own device.</li>
+<li>The web uses X.509 certificates, a large format with expiry dates and revocation lists. A three-level doSlim chain only needs raw Ed25519 signatures over "this key belongs to this pupil id in this school".</li>
+<li><strong>Revocation</strong>: when a card is lost, the chain must also say "this key no longer counts". Simplest form: the school keeps a signed list of current pupil keys, and devices use the newest.</li>
+<li>Back to your question: the CA <em>decides which keys to trust</em>. It does not decrypt anything, and it does not need to see any data.</li>
+</ul>
+</section>
+
+<section class="lesson" id="demoB">
+<h2>Try it: sign, change, swap</h2>
+<p>Real ECDSA P-256 signatures in WebCrypto (doSlim would use Ed25519; same idea).</p>
+<div class="demo">
+  <label for="bMsg" class="meta">What Ms Kaya signs</label>
+  <input id="bMsg" class="field" value="pupil 4821 in school 17 has public key 9c1f…">
+  <div class="chips">
+    <button class="btn" type="button" id="bMake">1. Make Ms Kaya's key pair</button>
+    <button class="btn" type="button" id="bSign">2. Sign</button>
+    <button class="btn" type="button" id="bVerify">3. Verify</button>
+    <button class="btn" type="button" id="bEdit">Change the text, verify</button>
+    <button class="btn" type="button" id="bSwap">Server forges a claim, verify</button>
+  </div>
+  <div class="out" id="bOut"><span class="dim">Make the key pair, sign, verify. Then try to cheat.</span></div>
+</div>
+</section>
+
+<section class="lesson" id="s9">
+<h2><span class="n">9.</span> Seeds: a key pair from 32 bytes</h2>
+<p>A key pair can be made from a 32-byte <strong>seed</strong> in a fixed way: the same seed always gives the same pair (libsodium <code>crypto_sign_seed_keypair</code>, <code>crypto_box_seed_keypair</code>). So the seed <em>is</em> the private key in a portable form.</p>
+<ul class="plain">
+<li>Crypto wallets write the seed as 24 words (BIP39): 2,048 possible words is 11 bits each, 24 words is 264 bits, of which 256 are the seed and 8 a checksum.</li>
+<li>doSlim's pupil card carries the seed as a QR instead of words. Scan the card, rebuild the key pair. Lesson 3 covers where it sits in the URL and why.</li>
+<li>Whoever holds the seed holds the key. A seed must be random (lesson 1), never derived from a name or a PIN.</li>
+</ul>
+</section>
+
+<h2 id="quiz">50 questions</h2>
+<p class="meta">Pick an answer; the explanation appears. Your progress stays in this browser.</p>
+<div id="quiz"></div>
+
+<footer>Lesson 2 of 3 · back: <a href="1-secret-keys.html">secret keys</a> · next: <a href="3-key-trees.html">key trees and doSlim</a></footer>
+</main>
+<script>
+window.QUIZ = { id: 'l2', items: [
+["What problem does public-key cryptography solve that lesson 1 could not?", ["Encrypting large files fast", "Getting a key to someone through a channel that must not read it", "Making keys longer", "Hashing passwords"], 1, "Symmetric keys need a shared secret first; key pairs remove that need."],
+["Which half of a key pair can you show to the server?", ["The private key", "The public key", "Both", "Neither"], 1, "The public key is meant to be shared with anyone."],
+["Can the private key be worked out from the public key?", ["Yes, in a few seconds", "Yes, with the server's help", "No, not in any practical time", "Only for short messages"], 2, "That one-way link is what the whole system rests on."],
+["In the padlock picture, the public key is...", ["the key that opens the padlock", "an open padlock anyone can snap shut", "the box", "the lock's serial number"], 1, "Anyone can lock with it; only the private key opens."],
+["How big is an X25519 public key?", ["16 bytes", "32 bytes", "256 bytes", "1 KB"], 1, "Curve25519 keys are 32 bytes."],
+["How big is an Ed25519 signature?", ["32 bytes", "64 bytes", "128 bytes", "256 bytes"], 1, "Ed25519 signatures are always 64 bytes."],
+["X25519 is used for...", ["signatures", "agreeing on a secret and encrypting to someone", "hashing", "password stretching"], 1, "X25519 is key agreement; Ed25519 is signing."],
+["Ed25519 is used for...", ["encryption", "signatures", "making nonces", "compressing keys"], 1, "Ed25519 is a signature scheme."],
+["What does Diffie-Hellman let two parties do?", ["Share a password", "Compute the same secret while a watcher sees only public keys", "Sign a message", "Hash a key"], 1, "Each combines their own private key with the other's public key."],
+["In Diffie-Hellman, what does Ayşe combine?", ["Her public key with Kaya's public key", "Her private key with Kaya's public key", "Both private keys", "Her private key with her own public key"], 1, "Own private plus other's public, on both sides, gives the same result."],
+["The server sees both public keys of a Diffie-Hellman exchange. Can it compute the shared secret?", ["Yes", "No", "Only if it has the nonce", "Only with a fast computer"], 1, "Without one of the private keys it cannot."],
+["Why is the shared secret not used to encrypt the data directly with public-key math?", ["It is illegal", "Public-key math is slow and suited to small values, so it sets up a symmetric key", "It would leak the private key", "It is too short"], 1, "That is hybrid encryption: public-key for the key, symmetric for the data."],
+["What is hybrid encryption?", ["Using two passwords", "Public-key crypto to share a symmetric key, symmetric crypto for the data", "Encrypting twice with AES", "Mixing TLS and disk encryption"], 1, "Every practical system, TLS included, works this way."],
+["In a sealed box, what is the throwaway key pair for?", ["To sign the message", "So the sender needs no key pair of their own for the exchange", "To make the box bigger", "To store on the server"], 1, "The ephemeral pair stands in for the sender and is deleted after."],
+["What does crypto_box_seal add to a message?", ["16 bytes", "48 bytes: a 32-byte public key and a 16-byte tag", "64 bytes", "Nothing"], 1, "Ephemeral public key plus Poly1305 tag."],
+["Sealing a 32-byte key with crypto_box_seal gives how many bytes?", ["32", "48", "80", "128"], 2, "32 + 48 = 80."],
+["After sealing, can the sender open their own sealed box?", ["Yes, always", "No, the throwaway private key was deleted", "Only within 24 hours", "Only with the salt"], 1, "Only the recipient's private key can redo the agreement."],
+["Does a sealed box tell the recipient who sent it?", ["Yes, it is signed", "No, sealed boxes are anonymous", "Yes, from the nonce", "Only on iPad"], 1, "Add a signature or use crypto_box when the sender matters."],
+["In doSlim, what does Ms Kaya's iPad seal for Ayşe's public key?", ["Every answer", "The Ayşe·Maths key (a small key, not the data)", "Ms Kaya's password", "The school key"], 1, "Seal the key; the key encrypts the data. Lesson 3 builds on this."],
+["What does a signature prove?", ["That the message is secret", "That this exact message was signed by the holder of that private key", "When it was signed", "That the server stored it"], 1, "Origin and integrity, not secrecy and not time."],
+["Does signing a message hide it?", ["Yes", "No, the message stays readable", "Only with Ed25519", "Only the first block"], 1, "Signing and encrypting are separate jobs."],
+["Who can verify a signature?", ["Only the signer", "Anyone with the signer's public key", "Only the server", "Only the CA"], 1, "Verification needs just the public key."],
+["One bit of a signed message is changed. Verification returns...", ["true", "false", "the original message", "a warning but true"], 1, "Any change breaks the signature."],
+["Why is a signature stronger proof of origin than lesson 1's tag?", ["It is longer", "Anyone holding the shared key can make a valid tag; only the private key holder can sign", "Tags can be forged by anyone", "Signatures are encrypted"], 1, "Tags prove 'someone with the key'; signatures prove 'this key holder'."],
+["What does a signature NOT prove on its own?", ["Who signed", "That nothing changed", "When it was signed or that it is not a replay", "That the public key matches"], 2, "Put a date or version inside the signed text to deal with time and replay."],
+["What is the swap (man-in-the-middle) attack here?", ["The server breaks AES", "The server hands out its own public key in place of the real one", "Two pupils swap iPads", "The nonce is reused"], 1, "The sender then encrypts perfectly, for the wrong person."],
+["Why can't encryption itself detect the swap attack?", ["Encryption is broken", "The encryption works; it was just aimed at the wrong public key", "The tag is missing", "The salt is wrong"], 1, "Only checking that a key belongs to the right person catches it."],
+["In the swap attack, can the server stay unnoticed?", ["No, decryption fails for everyone", "Yes, by reading and then sealing again for the real recipient", "No, the CA blocks it automatically", "Only for one message"], 1, "That is what makes man-in-the-middle dangerous."],
+["What is a key fingerprint?", ["The private key in hex", "A short hash of a public key that people can compare", "A biometric unlock", "A signature"], 1, "Short and comparable by eye or by QR."],
+["Where must a fingerprint be compared to help?", ["Over the same server", "Through a channel the server does not control (in person, paper, phone)", "In the database", "Nowhere, it checks itself"], 1, "Comparing through the attacker would just show you the attacker's fingerprint."],
+["Signal's safety numbers are an example of...", ["sealed boxes", "fingerprint comparison", "password hashing", "a CA"], 1, "Two people compare a code derived from both keys."],
+["Why do fingerprints alone not scale for 500 pupils?", ["They are too long", "Nobody checks 500 codes by hand; signatures let one checked key vouch for the rest", "They expire", "They need TLS"], 1, "Check one root by eye, then follow signatures."],
+["What does a certificate authority do?", ["Decrypts data for users", "Signs other keys to vouch that they belong to someone", "Stores private keys", "Makes nonces"], 1, "A CA vouches for keys. It does not decrypt anything."],
+["What is a certificate, at its core?", ["An encrypted file", "A public key plus a name, signed by a key above it", "A private key with a password", "A hash of a password"], 1, "X.509 adds lots of fields, but that is the core."],
+["How does a browser know which root CAs to trust?", ["It asks each website", "Root keys ship with the operating system or browser", "It guesses", "From DNS"], 1, "The root must arrive outside the system it protects."],
+["In the doSlim chain, who signs Ayşe's public key?", ["The operator", "Ms Kaya's key, when she prints Ayşe's card", "Ayşe herself", "Nobody"], 1, "Teacher signs pupil; school signs teacher."],
+["How does a doSlim device first learn the school's signing key safely?", ["From the server, no checks", "From the fingerprint on the school's welcome sheet or the admin's own device", "By guessing", "From Google"], 1, "Out of band, so the server cannot swap the root."],
+["Mr Arslan's iPad finds Ayşe's key is signed by a teacher key that is not signed by the school. What should it do?", ["Seal anyway", "Refuse and warn", "Ask the server", "Seal with a smaller key"], 1, "A broken chain is exactly the swap attack's signature."],
+["Does the CA in doSlim need to see pupils' work?", ["Yes, to sign it", "No, it only signs keys", "Only marks", "Only names"], 1, "Trust in keys and access to data are separate."],
+["Why skip full X.509 certificates for a three-level school chain?", ["X.509 is insecure", "Plain Ed25519 signatures over a short statement do the job without X.509's parsing, expiry and revocation machinery", "Browsers block X.509", "X.509 needs a blockchain"], 1, "Simpler to get right for a fixed, shallow tree."],
+["What is revocation?", ["Deleting the data", "Saying a key no longer counts, e.g. after a lost card", "Encrypting twice", "Renewing TLS"], 1, "Without it, a signed but lost key stays trusted."],
+["A simple revocation scheme for doSlim is...", ["Nothing; keys last forever", "A list of current pupil keys signed by the school, and devices use the newest", "Emailing pupils", "Changing the algorithm"], 1, "Devices trust only keys on the latest signed list."],
+["What is a seed?", ["A salt", "32 random bytes from which a key pair is made in a fixed way", "A public key", "A type of nonce"], 1, "Same seed, same key pair, every time."],
+["If you have someone's seed, you have...", ["only their public key", "their private key", "nothing useful", "their password"], 1, "The seed rebuilds the whole key pair."],
+["Why is a BIP39 24-word phrase 264 bits?", ["24 × 11 bits, 256 of them random and 8 a checksum", "Each word is 1 byte", "It includes the date", "It is padded with zeros"], 0, "2,048 words = 11 bits per word."],
+["What does doSlim's pupil card carry that a wallet writes as 24 words?", ["The school key", "The pupil's seed, as a QR", "The pupil's password", "The class key"], 1, "Scanning rebuilds the pupil's key pair on the iPad."],
+["Should a pupil's seed be made from their name and birth date?", ["Yes, easy to recover", "No, it must be random or anyone can rebuild the key", "Only for young pupils", "Only with Argon2id"], 1, "A guessable seed is a guessable private key."],
+["Why use separate key pairs for encryption and signing?", ["Required by law", "Different algorithms (X25519, Ed25519) and keeping one job's mistakes from hurting the other", "Signing keys are bigger", "To confuse attackers"], 1, "Standard practice; libsodium provides both families."],
+["In TLS, what plays the role of the CA chain?", ["The cookie", "The website's certificate signed up to a root in your device", "The password", "The nonce"], 1, "That is how your browser knows it is talking to the real site."],
+["Your original idea was 'the school is the CA'. What does the CA do in that design?", ["Encrypts and decrypts all data", "Vouches which public keys are real so devices seal keys only for the right people", "Stores everyone's private keys", "Hosts the server"], 1, "The school can also decrypt everything, but through the key tree of lesson 3, not because it is the CA."]
+]};
+</script>
+<script src="quiz.js"></script>
+<script>
+(function () {
+  const ecdh = { name: 'ECDH', namedCurve: 'P-256' };
+  let A, K;
+  const aOut = document.getElementById('aOut');
+  const pub = async (k) => hex(await crypto.subtle.exportKey('raw', k.publicKey), 20);
+  document.getElementById('aMake').onclick = async () => {
+    A = await crypto.subtle.generateKey(ecdh, false, ['deriveBits']);
+    K = await crypto.subtle.generateKey(ecdh, false, ['deriveBits']);
+    aOut.innerHTML = "Ayşe's public key     " + await pub(A) + "\nMs Kaya's public key  " + await pub(K) +
+      '\n<span class="dim">Both private keys were made non-exportable: even this page cannot read them. Only the public keys go through the server.</span>';
+  };
+  document.getElementById('aDerive').onclick = async () => {
+    if (!A) return aOut.innerHTML = '<span class="bad">Make the key pairs first.</span>';
+    const s1 = await crypto.subtle.deriveBits({ name: 'ECDH', public: K.publicKey }, A.privateKey, 256);
+    const s2 = await crypto.subtle.deriveBits({ name: 'ECDH', public: A.publicKey }, K.privateKey, 256);
+    const same = hex(s1) === hex(s2);
+    aOut.innerHTML = "Ayşe:    ECDH(ayse_private, kaya_public) = " + hex(s1) + "\nMs Kaya: ECDH(kaya_private, ayse_public) = " + hex(s2) +
+      '\n' + (same ? '<span class="ok">[x] Same 32 bytes on both sides. Neither sent it.</span>' : '<span class="bad">different?</span>');
+  };
+  document.getElementById('aEve').onclick = async () => {
+    if (!A) return aOut.innerHTML = '<span class="bad">Make the key pairs first.</span>';
+    const E = await crypto.subtle.generateKey(ecdh, false, ['deriveBits']);
+    const s = await crypto.subtle.deriveBits({ name: 'ECDH', public: A.publicKey }, E.privateKey, 256);
+    const t = await crypto.subtle.deriveBits({ name: 'ECDH', public: K.publicKey }, A.privateKey, 256);
+    aOut.innerHTML = 'The server has both public keys and its own key pair.\nserver: ECDH(server_private, ayse_public) = ' + hex(s) +
+      '\nreal secret                              = ' + hex(t) + '\n<span class="bad">[!] No match. Without Ayşe\'s or Ms Kaya\'s private key, the server cannot reach the secret.</span>' +
+      '\n<span class="dim">Unless it swaps a public key before the exchange: section 6.</span>';
+  };
+
+  const ecdsa = { name: 'ECDSA', namedCurve: 'P-256' }, algo = { name: 'ECDSA', hash: 'SHA-256' };
+  let T, sig, signed;
+  const bOut = document.getElementById('bOut');
+  const msgEl = document.getElementById('bMsg');
+  const need = () => { if (!sig) { bOut.innerHTML = '<span class="bad">Make the key pair and sign first.</span>'; return true; } };
+  document.getElementById('bMake').onclick = async () => {
+    T = await crypto.subtle.generateKey(ecdsa, false, ['sign', 'verify']); sig = null;
+    bOut.innerHTML = "Ms Kaya's public key  " + await pub(T) + '\n<span class="dim">The private key stays on her iPad.</span>';
+  };
+  document.getElementById('bSign').onclick = async () => {
+    if (!T) return bOut.innerHTML = '<span class="bad">Make the key pair first.</span>';
+    signed = msgEl.value;
+    sig = await crypto.subtle.sign(algo, T.privateKey, enc.encode(signed));
+    bOut.innerHTML = 'message    "' + signed + '"\nsignature  ' + hex(sig) + '\n<span class="dim">The message is still plain text. Signing hides nothing.</span>';
+  };
+  const verify = async (key, text, label, s) => {
+    const ok = await crypto.subtle.verify(algo, key, s || sig, enc.encode(text));
+    bOut.innerHTML = label + '\nmessage  "' + text + '"\n' + (ok ? '<span class="ok">[x] verify → true</span>' : '<span class="bad">[!] verify → false</span>');
+  };
+  document.getElementById('bVerify').onclick = () => need() || verify(T.publicKey, signed, "Verify with Ms Kaya's public key:");
+  document.getElementById('bEdit').onclick = () => need() || verify(T.publicKey, signed.replace(/\d/, (d) => String((+d + 1) % 10)), 'The server changed one digit (a different pupil id):');
+  document.getElementById('bSwap').onclick = async () => {
+    if (need()) return;
+    const evil = await crypto.subtle.generateKey(ecdsa, false, ['sign', 'verify']);
+    const fake = signed.replace(/key .*/, 'key EVIL0000');
+    const evilSig = await crypto.subtle.sign(algo, evil.privateKey, enc.encode(fake));
+    verify(T.publicKey, fake, "The server writes its own claim and signs it with its own key.\nThe iPad checks it against Ms Kaya's real public key, which it already trusts:", evilSig);
+  };
+})();
+</script>
+</body>
+</html>
