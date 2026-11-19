@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E2E encryption competitors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #201d1d; --ink-deep: #0f0000; --on-dark: #fdfcfc;
+  --canvas: #fdfcfc; --surface-soft: #f8f7f7; --surface-card: #f1eeee;
+  --surface-dark: #201d1d; --surface-dark-elevated: #302c2c;
+  --hairline: rgba(15, 0, 0, 0.12); --hairline-strong: #646262; --inset-strong: rgba(15, 0, 0, 0.22);
+  --text-body: #424245; --text-mute: #646262; --text-ash: #9a9898;
+  --accent: #007aff; --accent-hover: #0056b3; --accent-active: #004085;
+  --warning: #ff9f0a; --warning-active: #995f06; --danger: #ff3b30; --danger-active: #a50011; --success: #30d158;
+  /* Accent layer. Fills for stripes, meters and markers; text shades pass AA on canvas and on their tint. */
+  --accent-text: #0056b3; --success-text: #1a7a3a; --warning-text: #995f06;
+  --accent-tint: #e8f1ff; --success-tint: #e6f8eb; --warning-tint: #fff4e2; --danger-tint: #fdeaea;
+  --primary-accent: #0056b3; --primary-accent-hover: #004085;
+  /* Category palette for projects, sources and series. Swatches and stripes only, never text. */
+  --cat-1: #007aff; --cat-2: #ff9f0a; --cat-3: #30d158; --cat-4: #af52de; --cat-5: #ff3b30;
+  --cat-6: #30b0c7; --cat-7: #5856d6; --cat-8: #ff2d55; --cat-9: #a2845e; --cat-10: #ffcc00;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --display-xl-size: 38px; --body-size: 16px; --caption-size: 14px;
+  --space-xs: 4px; --space-sm: 8px; --space-md: 12px; --space-lg: 16px; --space-xl: 24px; --space-xxl: 32px; --space-section: 96px;
+  --radius-none: 0px; --radius-sm: 4px; --radius-full: 9999px;
+  --l1: 2px 2px 0 var(--ink); --l2: 4px 4px 0 var(--ink); --l3: 6px 6px 0 var(--ink);
+  --inset: inset 3px 3px 0 var(--hairline); --inset-pressed: inset 2px 2px 0 var(--inset-strong);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-soft);color:var(--text-body);font:400 var(--body-size)/1.5 var(--font-mono)}
+.frame{max-width:1100px;margin:0 auto;padding:32px 16px 96px}
+.page{background:var(--canvas);border:1px solid var(--ink);box-shadow:var(--l2);padding:32px}
+.crumb{font-size:var(--caption-size);color:var(--text-mute);margin:0 0 4px}
+h1{font-size:var(--display-xl-size);font-weight:700;line-height:1.3;color:var(--ink);margin:0 0 8px}
+#doc>p:first-of-type{color:var(--text-mute);font-size:var(--caption-size)}
+h2{font-size:20px;font-weight:700;color:var(--ink);margin:48px 0 12px;padding-top:24px;border-top:1px solid var(--hairline-strong)}
+h3{font-size:16px;font-weight:700;color:var(--ink);margin:32px 0 8px;padding-left:12px;box-shadow:inset 4px 0 0 var(--accent)}
+p,li{max-width:960px}
+a{color:var(--accent-text);text-underline-offset:4px}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+strong{color:var(--ink);font-weight:500}
+code{background:var(--surface-card);padding:1px 4px;border-radius:var(--radius-sm)}
+blockquote{margin:16px 0;padding:12px 16px;background:var(--accent-tint);border:1px solid var(--ink);box-shadow:var(--l1),inset 4px 0 0 var(--accent)}
+blockquote p{margin:6px 0;color:var(--ink)}
+.tablewrap{overflow-x:auto;border:1px solid var(--ink);box-shadow:var(--l2);margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:var(--caption-size)}
+th{background:var(--surface-card);text-align:left;font-weight:700;color:var(--ink);border-bottom:1px solid var(--ink);padding:8px 10px;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top}
+td:nth-child(2){font-weight:500;white-space:nowrap}
+td.no{color:var(--danger-active)} td.yes{color:var(--success-text)} td.part{color:var(--warning-text)}
+@media (max-width:640px){.page{padding:16px}h1{font-size:28px}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){}}
+</style></head>
+<body><div class="frame"><div class="page">
+<p class="crumb">doslim / design / research</p>
+<div id="doc"></div>
+</div></div>
+<script type="text/markdown" id="src">
+# Competitors and end-to-end encryption of pupils' work
+
+Research date: 2026-11-19. All sources were accessed on that date unless a row says otherwise.
+
+Question: does any classroom, homework or school learning app encrypt pupils' work end to end, so that the vendor's servers hold only ciphertext and the vendor cannot read pupils' answers, work or grades? And what may doSlim claim?
+
+What counts as end to end here: the content is encrypted on the user's device and the vendor never holds a key that opens it. Encryption at rest with provider-held keys, TLS in transit, and customer-managed keys where the vendor's service still decrypts to process data do not count.
+
+This is not legal advice.
+
+## Short answer
+
+None of the large classroom platforms checked (Google Classroom, Microsoft Teams for Education and OneNote Class Notebook, Seesaw, ClassDojo, Showbie, Canvas, Moodle, Schoology, itslearning, Brightspace, Smartschool) encrypts pupils' assignments, answers or grades end to end. They all claim TLS in transit and encryption at rest with keys the vendor or its cloud provider manages. Google's client-side encryption (Education Standard and Plus) does not list Classroom among its services. Microsoft's Double Key Encryption is "Not available" in OneNote and SharePoint cannot process DKE files.
+
+End-to-end encryption does exist in school software, in three narrower places:
+
+1. School messengers: Threema Education, schul.cloud (stashcat), the LOGINEO NRW Messenger (Matrix), Element. These encrypt chats, not assignments and grades. schul.cloud says its files only get transport encryption.
+2. Teacher-only grade books in Germany: Lehrmeister (Software Werke GmbH) states that all data, including grades and homework checks, is encrypted end to end with a key derived from the teacher's password and that the vendor applies a "Zero-Knowledge-Prinzip". Pupils do not use it, but it means "the first app where the company cannot read pupils' grades" would be false.
+3. General tools and small projects: CryptPad forms (end-to-end encrypted form responses, usable as quizzes), Cryptomator Hub (encrypted file storage that it markets for assignment submission), and BormoClass (a self-hosted open-source classroom app on GitHub, 0 stars, that encrypts submissions in the browser with keys derived from a class PIN).
+
+I found no hosted classroom product where pupils submit work to a teacher, the teacher marks it, and the vendor states that it cannot read the work. That supports a hedged "first" claim, not an absolute one.
+
+## Summary table
+
+| Product | E2E for pupils' work | What they do claim | Source |
+| --- | --- | --- | --- |
+| Google Classroom / Workspace for Education | No | Client-side encryption (CSE) exists for Education Standard and Plus, but covers Drive and Docs editors, Gmail, Calendar and Meet. Classroom is not listed. | [CSE services](https://knowledge.workspace.google.com/admin/security/protect-your-organizations-data-with-cse?hl=en), [About CSE](https://knowledge.workspace.google.com/admin/security/about-client-side-encryption) |
+| Microsoft Teams for Education, OneNote Class Notebook, M365 Education | No | Purview sensitivity labels; Double Key Encryption (DKE) works in Word, Excel, PowerPoint, Outlook desktop. DKE "Not available" in OneNote on every platform. SharePoint and OneDrive cannot process DKE files. | [DKE](https://learn.microsoft.com/en-us/purview/double-key-encryption), [Label capabilities](https://learn.microsoft.com/en-us/purview/sensitivity-labels-versions) |
+| Apple Schoolwork (Managed Apple Accounts) | No | Advanced Data Protection (end-to-end iCloud) not supported for Managed Apple Accounts. | [Apple Platform Security](https://support.apple.com/guide/security/advanced-data-protection-for-icloud-sec973254c5f/web) |
+| Seesaw | No | Encryption in transit. | [seesaw.com/privacy-security](https://seesaw.com/privacy-security) |
+| ClassDojo | No | TLS 1.2 in transit, AES 256 in storage. | [classdojo.com/transparency](https://classdojo.com/transparency) |
+| Showbie | No | Database encrypted; personal information encrypted by Showbie's systems. | [Showbie database security](https://support.showbie.com/en/articles/1682474-what-security-measures-does-showbie-s-database-have-in-place) |
+| Canvas (Instructure) | No | TLS 1.2 or higher; data at rest in encrypted volumes. | [Instructure Trust Center](https://instructure.com/en-au/trust-center/security) |
+| Moodle | No (no E2E plugin found) | No vendor E2E claim found. A proposal for GPG-encrypted outgoing email (MDL-69272) is marked Deferred. | [MDL-69272](https://tracker-old.moodle.org/browse/MDL-69272) |
+| Schoology (PowerSchool) | Not verified (no E2E claim found) | Only a PowerSchool-wide datasheet with AES-256 at rest and TLS in transit surfaced; not fetched. | Not verified |
+| itslearning | No | HTTPS in transit; "particular sensitive" data at rest encrypted or hashed. | [itslearning security measures](https://itslearning.com/global/gdpr/securitymeasures/) |
+| Brightspace (D2L) | No | TLS in transit; "secure cloud infrastructure". | [D2L security best practices](https://www.d2l.com/en-eu/security/best-practices) |
+| Smartschool (Belgium) | Not verified | No vendor security page found. | Not verified |
+| Edmodo | Not applicable (shut down) | Free version closed on 2022-09-22, data deleted. | [NetDragon press release](https://prnewswire.com/news-releases/edmodo-announced-closure-of-its-b2c-version-to-focus-on-country-rollout-opportunities-301608283.html) |
+| SchoolFox (Austria) | No claim found | Data in ISO 27001 data centres in Germany; no encryption claim on the page. | [SchoolFox data security](https://foxeducation.com/en/schoolfox/data-security-privacy/) |
+| ParentSquare | No | AES-256 in transit and at rest, HTTPS. | [ParentSquare security](https://www.parentsquare.com/platform/security-and-compliance/) |
+| Bloomz | No | Encrypted at rest and in transit; HTTPS APIs. | [Bloomz security pledge](https://www.bloomz.com/security-pledge) |
+| Threema Education | Messaging only: yes | End-to-end encrypted chats, calls and files. No assignment or grading features. | [Threema for schools](https://threema.com/en/industries/education/threema-for-schools) |
+| schul.cloud (stashcat) | Messaging partly | Chats end to end; files transport encryption only. Marketing page says messages and files are protected end to end. | [schul.cloud Hilfe](https://schul.cloud/hilfe/), [schul.cloud Sicherheit](https://schul.cloud/sicherheit/) |
+| LOGINEO NRW Messenger (Matrix) | Messaging only: yes | Matrix messenger, E2E on by default for new rooms, key backup. | [LOGINEO NRW material](https://www.logineo.schulministerium.nrw.de/_LOGINEO-NRW/Messenger/Was-ist-der-LOGINEO-NRW-Messenger/Was_ist_der_LOGINEO_NRW_Messenger.pdf) |
+| Element (Matrix) for education | Messaging only: yes | E2E by default; no coursework features. | [Element education](https://translated.element.io/en/sectors/education) |
+| dBildungscloud (formerly HPI Schul-Cloud) | Not verified | Has tasks and a Matrix-based messenger; no E2E statement found. | Not verified |
+| Lehrmeister (teacher grade book, DE) | Yes for teacher data, incl. grades; pupils do not use it | All data E2E encrypted with AES-256, key from the teacher's password, "Zero-Knowledge-Prinzip". | [Lehrmeister Datenschutz PDF](https://lehrmeister.eu/assets/pdf/lehrmeister-datenschutz-und-it-sicherheit.pdf) |
+| Tapucate (teacher grade book, DE) | Unclear | GEW lists it as E2E encrypted, local storage. Vendor page not checked. | Not verified (secondary: [GEW](https://www.gew.de/bildung-digital/apps-und-tools-fuer-lehrkraefte)) |
+| Bunt (teacher grade book) | Unclear | App Store text: data encrypted on device; E2E only for optional iCloud sync. | Not verified (App Store listing only) |
+| CryptPad (forms) | Yes for form responses; not a classroom app | "Form responses are end-to-end encrypted like everything else on CryptPad." | [CryptPad Form](https://cryptpad.org/apps/form/) |
+| Cryptomator Hub (education) | File storage, yes; not a classroom app | Zero-knowledge encrypted storage; lists "Protected digital assignment submission". | [Cryptomator education](https://cryptomator.org/solutions/education/) |
+| BormoClass (open source, self-hosted) | Yes, as described; no vendor | Submissions encrypted in browser with keys from class PIN; self-hosted. | [GitHub](https://github.com/Bormotoon/BormoClass) |
+| Anonymize.Education | Middleware, not a classroom app | "End-to-end encryption with keys you control." | [anonymize.education](https://anonymize.education/) |
+
+## Per-product notes
+
+### Google Classroom and Google Workspace for Education
+
+Google offers client-side encryption (CSE), which it describes as "end-to-end encryption that Google servers and third parties can't decrypt" ([About CSE](https://knowledge.workspace.google.com/admin/security/about-client-side-encryption)). It exists for education: "Supported editions for this feature: Frontline Plus; Enterprise Plus; Education Standard and Education Plus."
+
+The page on supported services lists four: "Google Drive and Google Docs Editors", "Gmail", "Google Calendar" and "Google Meet" ([Protect your organization's data with CSE](https://knowledge.workspace.google.com/admin/security/protect-your-organizations-data-with-cse?hl=en)). Classroom is not on the list. A school could in theory attach a client-side encrypted Drive file to a Classroom assignment, but Classroom itself (posts, submissions state, grades, private comments) is not covered, and I found no Google page that documents how Classroom handles CSE files. CSE also needs the school to run its own key service and identity provider.
+
+Verdict: no for Classroom. Partly for Drive files, outside Classroom.
+
+### Microsoft Teams for Education, OneNote Class Notebook, Microsoft 365 Education
+
+Microsoft's closest feature is Double Key Encryption (DKE): "Viewing data protected with Double Key Encryption requires access to both keys", one held by the customer ([DKE](https://learn.microsoft.com/en-us/purview/double-key-encryption)). The same page lists what does not work with it:
+
+- "SharePoint and OneDrive can't process DKE-encrypted files. These files can't be opened in Office for the web, and collaborative features such as coauthoring ... don't work".
+- "DKE labels can't be used to protect calendar items, Teams meetings, and chat."
+- Supported applications are "Microsoft 365 Apps for enterprise clients on Windows, including Word, Excel, PowerPoint, and Outlook."
+
+The capabilities table for OneNote shows the row "Double Key Encryption (DKE)" as "Not available" on Windows, Mac, iOS, Android and Web ([Minimum versions for sensitivity labels](https://learn.microsoft.com/en-us/purview/sensitivity-labels-versions)). Class Notebook is a OneNote notebook in SharePoint, and Teams assignments are stored in SharePoint and OneDrive, so DKE does not reach either. Ordinary sensitivity-label encryption in OneNote uses the Azure Rights Management service, which Microsoft operates.
+
+Verdict: no.
+
+### Apple Schoolwork and Managed Apple Accounts
+
+Schoolwork runs on school-issued Managed Apple Accounts. Apple's end-to-end option for iCloud, Advanced Data Protection, excludes them: "Managed Apple Accounts and child accounts (varies by country or region) aren't supported." ([Apple Platform Security](https://support.apple.com/guide/security/advanced-data-protection-for-icloud-sec973254c5f/web)).
+
+Verdict: no.
+
+### Seesaw
+
+Seesaw's privacy page says it will "provide secure communication with our servers at all times, encrypt content in transit" ([seesaw.com/privacy-security](https://seesaw.com/privacy-security)). Its help article (403 to my fetch; seen through search) adds encryption at rest. No end-to-end claim.
+
+Verdict: no.
+
+### ClassDojo
+
+The transparency page lists for its data processing: "Encryption (In Transit), Encryption (In Storage) Encryption type: TLS 1.2; AES 256" ([classdojo.com/transparency](https://classdojo.com/transparency)). Search results from its security overview describe AWS S3 "with AWS managed keys" and Aurora with customer managed keys, meaning keys ClassDojo manages in AWS. No end-to-end claim for portfolios or messages.
+
+Verdict: no.
+
+### Showbie
+
+"Encryption of our entire database." and "Any personal information entered into the Showbie iOS or Web App is encrypted." ([Showbie support](https://support.showbie.com/en/articles/1682474-what-security-measures-does-showbie-s-database-have-in-place)). This is encryption by Showbie's systems; search results from its other articles say files use Amazon server-side encryption and KMS.
+
+Verdict: no.
+
+### Canvas (Instructure)
+
+"All data is encrypted in transit." "Inbound and outbound traffic is encrypted using TLS 1.2 or higher." "All data is stored at rest within encrypted volumes." ([Instructure Trust Center](https://instructure.com/en-au/trust-center/security)).
+
+Verdict: no.
+
+### Moodle
+
+Moodle is open source and self-hosted, so the "vendor" is usually the school or a hosting partner. I found no plugin that encrypts assignment submissions, quiz answers or grades end to end. The Moodle tracker issue MDL-69272 proposes end-to-end encryption of outgoing email with GPG and is marked "Deferred" ([MDL-69272](https://tracker-old.moodle.org/browse/MDL-69272)). The plugin directory refused automated access (403), so I could not search it directly.
+
+Verdict: no, with the plugin directory not fully checked.
+
+### Schoology (PowerSchool)
+
+No Schoology-specific encryption page found. Search surfaced a PowerSchool-wide datasheet that mentions AES-256 at rest and TLS in transit, which I did not fetch. No end-to-end claim found anywhere.
+
+Verdict: no claim found; not verified from a primary page.
+
+### itslearning
+
+"Particular sensitive customer data at rest is protected by encryption and/or hashing (pseudonymisation)" and "HTTPS encryption (also referred to as SSL or TLS connection) with secure cryptographic keys" ([itslearning security measures](https://itslearning.com/global/gdpr/securitymeasures/)).
+
+Verdict: no.
+
+### Brightspace (D2L)
+
+"Connection to the Brightspace environment is established through TLS cryptographic protocols with RSA encryption." and "We store data using secure cloud infrastructure" ([D2L](https://www.d2l.com/en-eu/security/best-practices)).
+
+Verdict: no.
+
+### Smartschool (Belgium)
+
+I found no security or encryption page from Smartschool (Smartbit) through search, and no third-party claim that it uses end-to-end encryption.
+
+Verdict: not verified.
+
+### Edmodo
+
+NetDragon announced that "Edmodo, its subsidiary, has decided to shut down its free B2C version", effective 2022-09-22, with accounts and data deleted ([PR Newswire release](https://prnewswire.com/news-releases/edmodo-announced-closure-of-its-b2c-version-to-focus-on-country-rollout-opportunities-301608283.html)). Paid country deployments were said to continue.
+
+Verdict: not a current competitor in the EU.
+
+### SchoolFox (Fox Education, Austria)
+
+The data security page says it "stores it in ISO 27001 certified data centres in Germany" and makes no encryption claim ([SchoolFox](https://foxeducation.com/en/schoolfox/data-security-privacy/)). A Winterthur processing register (customer document) lists encryption at rest and in transit.
+
+Verdict: no end-to-end claim.
+
+### ParentSquare and Bloomz
+
+ParentSquare: "Data encryption in transit and at rest using AES-256 and transmitted via HTTPS" ([ParentSquare](https://www.parentsquare.com/platform/security-and-compliance/)). Bloomz: "Sensitive information is protected at rest and in transit across untrusted networks using encryption." ([Bloomz](https://www.bloomz.com/security-pledge)).
+
+Verdict: no for both.
+
+### Threema Education
+
+"Instead, it offers true end-to-end encryption and gives the school full control" and "End-to-end encrypted chats" ([Threema for schools](https://threema.com/en/industries/education/threema-for-schools)). Features are chats, broadcasts, polls and file sharing. No assignment, homework submission or grading.
+
+Verdict: yes for messaging. Not a classroom work app.
+
+### schul.cloud (stashcat)
+
+The help page says "Ihre Chats werden mittels echter Ende-zu-Ende-Verschlüsselung geschützt." and "Ihre Dateien werden mittels Transportverschlüsselung geschützt." ([schul.cloud Hilfe](https://schul.cloud/hilfe/)). The marketing page says "alle Nachrichten und Dateien von der Quelle bis zum Ziel vollständig geschützt sind" with "AES (256bit) und RSA (4096bit)" ([schul.cloud Sicherheit](https://schul.cloud/sicherheit/)). The two pages disagree on files. Its App Store listing mentions homework and course material inside the messenger, but the vendor pages I read describe no assignment or grading feature.
+
+Verdict: partly, for chats. Files that pupils hand in are, by the help page, only transport encrypted.
+
+### LOGINEO NRW Messenger and Element (Matrix)
+
+The North Rhine-Westphalia school ministry runs a Matrix-based messenger for schools. Its training material describes end-to-end encryption that is on by default for new rooms, key backup and cross-signing ([LOGINEO NRW](https://www.logineo.schulministerium.nrw.de/_LOGINEO-NRW/Messenger/Was-ist-der-LOGINEO-NRW-Messenger/Was_ist_der_LOGINEO_NRW_Messenger.pdf); the E2E details come from search snippets of the ministry's admin PDFs, not a full read). Element's education page: "End-to-end encryption by default keeps users' conversations and files safe." No coursework features ([Element](https://translated.element.io/en/sectors/education)).
+
+Verdict: yes for messaging only.
+
+### dBildungscloud (formerly HPI Schul-Cloud)
+
+It has a task feature and a Matrix-based team messenger. I found no statement on whether tasks or submissions are end-to-end encrypted, and no statement that the messenger has E2E turned on.
+
+Verdict: not verified. Nothing suggests tasks are E2E.
+
+### Lehrmeister (teacher app, Software Werke GmbH, Germany)
+
+This is the closest product to doSlim's claim. It is a grade book and class register for teachers: attendance, homework checks, participation and grades. From the vendor's PDF "Lehrmeister - Datenschutz und IT-Sicherheit ab 2026-01-01" ([PDF](https://lehrmeister.eu/assets/pdf/lehrmeister-datenschutz-und-it-sicherheit.pdf)):
+
+- "Alle deine Daten werden bei Lehrmeister Ende zu Ende verschlüsselt. Das bedeutet, dass sie direkt auf deinem Gerät verschlüsselt und erst danach zum Server übertragen werden."
+- "Dieser Schlüssel wird nur auf deinem Gerät gespeichert und nicht an den Server übertragen." (key derived from the password with PBKDF2, data with AES-256)
+- "Lehrmeister wendet das sogenannte Zero-Knowledge-Prinzip an. Deine Daten sind sicher, da wir diese, selbst wenn wir wollten, niemals entschlüsseln könnten."
+- Caveat in the same PDF: an optional key backup stores the key on the vendor's server.
+
+Pupils do not log in or hand in work. It holds data about pupils (grades, homework done or not), not pupils' own work.
+
+Verdict: yes for teacher-entered pupil data, including grades. No for pupils' own work, because there is none in the app.
+
+How widely used it is (checked 2026-11-19): small. The only figure found is "more than 35,000 downloads", from an undated interview on the blog of the school supplier Betzold, which co-brands it as "Lehrmeister by Betzold" ([Betzold blog](https://www.betzold.de/blog/lehrmeister-interview)). No count of active users is published. The iPad App Store listing (free, with in-app purchases) does not have enough ratings to show a score ([App Store](https://apps.apple.com/us/app/lehrmeister-die-lehrer-app/id1408217345)), and an app tracker shows no rating or download count either ([Similarweb](https://similarweb.com/app/apple/1606505499/vs/1408217345)). Germany has roughly 800,000 teachers, so lifetime downloads are a few percent at most. It is a single teacher's grade book on their own device: no pupils, no class, nothing handed in. It is not a competitor in doSlim's market, but its end-to-end claim about grades still limits the wording (see the conclusion).
+
+### Tapucate and Bunt (teacher grade books)
+
+The GEW (German teachers' union) list says Tapucate "baut keine Verbindung zum Internet auf und verschlüsselt alle personenbezogenen Daten (Ende zu Ende)" with local storage ([GEW](https://www.gew.de/bildung-digital/apps-und-tools-fuer-lehrkraefte), secondary source). Bunt's App Store text says data is stored encrypted on the device and E2E for optional iCloud sync. Neither involves pupils.
+
+Verdict: unclear, not verified from vendor pages. Same category as Lehrmeister.
+
+### CryptPad
+
+"Form responses are end-to-end encrypted like everything else on CryptPad." and "all form data is end-to-end encrypted, meaning only you and authorized collaborators can access the information." ([CryptPad Form](https://cryptpad.org/apps/form/)). CryptPad markets an education use case ([CryptPad education](https://cryptpad.org/use-case/education)). A teacher can use a form as a quiz, but there is no class, assignment or grading model.
+
+Verdict: yes for form responses; a general tool, not a classroom app.
+
+### Cryptomator Hub (education)
+
+The page lists "Protected digital assignment submission" and "Open-source encryption with zero-knowledge architecture"; files are encrypted on the device so "personal data stays unreadable to the cloud provider and anyone without access" ([Cryptomator education](https://cryptomator.org/solutions/education/)). It is encrypted file storage on top of another cloud. It does not explain how a submission flow between pupil and teacher works.
+
+Verdict: file storage with E2E; not a classroom app, but it uses the words "assignment submission". This matters for wording.
+
+### BormoClass (open source)
+
+A self-hosted "Google Classroom Alternative" on GitHub. Submissions, teacher remarks and drawings "are encrypted directly in the browser via WebCrypto AES-256-GCM + ECDH P-256 using class PIN-derived keys"; "The backend server acts solely as a blinded content-addressable storage (CAS) engine." ([GitHub](https://github.com/Bormotoon/BormoClass)). Keys come from a 5-digit class PIN and the class ID through PBKDF2, which a server operator could brute-force (100,000 guesses), so the protection is weak. The repository had 0 stars and 51 commits. No company runs it as a service.
+
+Verdict: yes as described, in a hobby-scale self-hosted project. It is prior art for the idea, not a company.
+
+### Anonymize.Education
+
+Middleware that anonymises student data before it goes to AI tools: "End-to-end encryption with keys you control" and "We can't see your student data. Not because of policy, but because of math." ([anonymize.education](https://anonymize.education/)). It is not a classroom app and does not say it holds assignments.
+
+Verdict: not a classroom app; it does show that "we can't see your student data" is already a phrase in edtech marketing.
+
+## Conclusion and recommended wording
+
+### What the evidence supports
+
+- No mainstream classroom or homework platform checked encrypts pupils' work end to end. Google and Microsoft have customer-key features, but neither covers Classroom, Class Notebook or Teams assignments.
+- End-to-end encryption is common in school messengers. Any claim about "school apps" or "school communication" would be false.
+- A German teacher grade book (Lehrmeister, about 35,000 downloads, no pupils in the app) already claims zero-knowledge, end-to-end encryption of pupils' grades and homework records. It is a niche tool, not a classroom app, but any claim that covers grades alone, or "pupil data", is at risk.
+- Small or general tools (CryptPad forms, Cryptomator Hub, BormoClass) already encrypt answers or submissions end to end. None is a hosted classroom app where pupils do assignments and teachers mark them, but they show that an absolute "first" or "only" can be challenged by someone who finds a product this search missed.
+- The search covered English, German, French and Dutch. It was not exhaustive: there are thousands of small edtech apps, and several products could not be verified (list below).
+
+### The three candidate claims
+
+(a) "The first classroom app where the company cannot read pupils' work". Not safe as an absolute fact. It is probably true for hosted products where pupils do and hand in work, but "first" is a factual claim doSlim would have to prove, and it cannot prove a negative across all edtech. BormoClass (self-hosted, 2026) and Cryptomator's "protected digital assignment submission" give a competitor or a court something to point at. "Classroom app" is also vague enough that Lehrmeister (grades) could be argued to fall inside it.
+
+(b) "The only ...". Not safe. Stronger than "first", it must stay true every day after publication, and doSlim cannot monitor the market.
+
+(c) Hedged forms. Safe if kept specific and dated:
+
+- "As far as we know, the first classroom app where pupils' assignments, answers and grades are encrypted on the device, so the company cannot read them."
+- "We know of no other classroom app that does this. Google Classroom, Microsoft Teams and the other large platforms we checked in November 2026 can read pupils' work on their servers."
+- The plain mechanism claim needs no comparison at all: "Pupils' work is encrypted on the device. Our servers store only ciphertext, and we hold no key that opens it."
+
+### Recommended wording
+
+Lead with the mechanism, which doSlim can prove by its design, and add a hedged comparison with a date and a link to this kind of research:
+
+> doSlim encrypts pupils' work on their device. Our servers store only ciphertext and never hold a key that opens it, so we cannot read pupils' answers, work or grades.
+>
+> We know of no other classroom app that works this way. (Checked November 2026 against Google Classroom, Microsoft Teams for Education, Seesaw, ClassDojo, Showbie, Canvas, Moodle, itslearning and Brightspace.)
+
+If a one-line slogan is needed: "The classroom app that can't read your pupils' work." It describes doSlim without a superlative and needs no comparison.
+
+Avoid: "the first", "the only", "the most secure", "unlike all other school apps", "the first end-to-end encrypted school app" (false, because of messengers), and any claim about "pupil data" in general (Lehrmeister).
+
+Keep the evidence: Article 12 of the UCPD lets authorities "require the trader to furnish evidence as to the accuracy of factual claims". Keep this file, its dated sources and a short description of doSlim's key design as that evidence, and re-check before each marketing change.
+
+### EU rules, as context only
+
+This section is context, not legal advice. Ask a lawyer before publishing a comparative or superlative claim.
+
+- Unfair Commercial Practices Directive 2005/29/EC ([EUR-Lex](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32005L0029)). Article 6(1): a practice is misleading if it "contains false information and is therefore untruthful or in any way, including overall presentation, deceives or is likely to deceive the average consumer, even if the information is factually correct", including about "the main characteristics of the product". Article 12 lets courts or authorities "require the trader to furnish evidence as to the accuracy of factual claims" and "consider factual claims as inaccurate if the evidence demanded ... is not furnished". A "first" or "only" claim is a factual claim the trader must be able to back.
+- Misleading and Comparative Advertising Directive 2006/114/EC ([EUR-Lex](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32006L0114)). It mainly protects traders, which matters when schools are the buyers. Article 2(c) defines comparative advertising as "any advertising which explicitly or by implication identifies a competitor or goods or services offered by a competitor". Article 4 allows it only when, among other conditions, "it is not misleading" and "it objectively compares one or more material, relevant, verifiable and representative features". Naming Google Classroom or Teams in a comparison makes it comparative advertising, so each statement about them must be accurate and checkable, as in the table above.
+- EUR-Lex refused automated access during this research (a bot challenge). The quotes were checked against the same directive text on legislation.gov.uk ([2005/29 Art. 6](https://www.legislation.gov.uk/eudr/2005/29/article/6), [Art. 12](https://www.legislation.gov.uk/eudr/2005/29/article/12), [2006/114 Art. 2](https://www.legislation.gov.uk/eudr/2006/114/article/2), [Art. 4](https://www.legislation.gov.uk/eudr/2006/114/article/4)).
+- National law (for example the German UWG or Belgian and Dutch rules) implements these directives and may be stricter about "Alleinstellungswerbung" (sole-position claims). Not researched here.
+
+## Not verified
+
+Could not confirm from a primary source:
+
+- Schoology (PowerSchool): no Schoology-specific security page fetched; no E2E claim found anywhere.
+- Smartschool (Belgium): no vendor security or encryption page found.
+- dBildungscloud: no statement on encryption of tasks or the messenger.
+- Seesaw help-centre article on at-rest encryption: blocked (403); only the privacy page was read.
+- Moodle plugin directory: blocked (403); no E2E plugin found by search, but the directory itself was not searched.
+- Tapucate and Bunt: only a GEW list and App Store text, not vendor documentation.
+- Sdui (German school app): no source found on its encryption.
+- Wire for schools: not checked.
+- LOGINEO NRW Messenger: E2E details came from search snippets of ministry PDFs, not a full read.
+- Google Classroom handling of client-side encrypted Drive attachments: no Google page found either way.
+- French and Dutch homework platforms (Pronote, ENT "Travail à faire", Somtoday, Magister): search found no E2E claim, but their own security pages were not read.
+- EUR-Lex pages: blocked; directive text checked on legislation.gov.uk instead.
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script>
+const md=document.getElementById('src').textContent;
+const doc=document.getElementById('doc');
+doc.innerHTML=marked.parse(md);
+doc.querySelectorAll('table').forEach(t=>{const w=document.createElement('div');w.className='tablewrap';t.parentNode.insertBefore(w,t);w.appendChild(t);
+ t.querySelectorAll('tbody tr').forEach(r=>{const c=r.cells[1];if(!c)return;const v=c.textContent.trim().toLowerCase();
+  if(v.startsWith('no'))c.classList.add('no');else if(v.startsWith('yes')||v.startsWith('messaging only: yes'))c.classList.add('yes');else c.classList.add('part');});});
+doc.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener'});
+</script>
+</body></html>
